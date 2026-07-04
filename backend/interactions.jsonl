@@ -1,0 +1,8 @@
+{"ts": "2026-07-03T09:00:00", "source": "vscode",   "text": "PaymentProcessor.charge() throws on null amount", "role": "user"}
+{"ts": "2026-07-03T09:00:30", "source": "chat",     "text": "fix the null-pointer in checkout", "role": "user"}
+{"ts": "2026-07-03T09:05:00", "source": "slack",    "text": "Stripe 402 from billing endpoint, customer X", "role": "user"}
+{"ts": "2026-07-03T09:12:00", "source": "db",       "text": "SELECT * FROM payments WHERE status='failed' LIMIT 20", "role": "user"}
+{"ts": "2026-07-03T10:30:00", "source": "browser",  "text": "Sales call notes with Acme, Q3 forecast", "role": "user"}
+{"ts": "2026-07-03T10:45:00", "source": "chat",     "text": "draft my weekly update", "role": "user"}
+{"ts": "2026-07-03T11:20:00", "source": "vscode",   "text": "PaymentProcessor.charge() — back to the null amount bug", "role": "user"}
+{"ts": "2026-07-03T11:21:00", "source": "slack",    "text": "Stripe 402 from billing endpoint, customer X — same as before", "role": "user"}
