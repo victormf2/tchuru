@@ -10,6 +10,7 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "@huggingface/transformers": "^4.2.0"
+    "@huggingface/transformers": "^4.2.0",
+    "@opencode-ai/sdk": "1.17.12"
   }
 }
