@@ -2,3 +2,4 @@ qmltypes
 __pycache__
 .opencode/plans
 .venv
+node_modules

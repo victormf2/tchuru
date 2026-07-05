@@ -127,7 +127,7 @@ def _alpha_C(k: float, sim: float, n: int) -> float:
     return base + (1.0 - base) * maturity
 
 
-ALPHA_FNS: dict[str, callable] = {
+ALPHA_FNS = {
     "A": _alpha_A,
     "B": _alpha_B,
     "C": _alpha_C,
@@ -190,9 +190,9 @@ class Item:
 class Segment:
     id: int
     started_at: datetime
+    centroid: np.ndarray
     ended_at: Optional[datetime] = None
     items: list[Item] = field(default_factory=list)
-    centroid: Optional[np.ndarray] = None
     soft_boundaries: list[tuple[int, float]] = field(default_factory=list)
     reopened_from: Optional[int] = None
 
@@ -214,8 +214,8 @@ class UniXcoderEmbedder:
     """
 
     def __init__(self, name: str) -> None:
-        from transformers import AutoTokenizer, AutoModel
         import torch
+        from transformers import AutoModel, AutoTokenizer
         self._torch = torch
         device = "cuda" if torch.cuda.is_available() else "cpu"
         self.tokenizer = AutoTokenizer.from_pretrained(name, trust_remote_code=True)
@@ -248,17 +248,14 @@ class UniXcoderEmbedder:
         return arr[0] if single else arr
 
 
-_models: dict[str, object] = {}
+_models: dict[str, SentenceTransformer] = {}
 
 
-def get_model(name: str) -> object:
+def get_model(name: str) -> SentenceTransformer:
     """Load a model by name; cache by name. Returns anything with .encode()."""
     m = _models.get(name)
     if m is None:
-        if name == "microsoft/unixcoder-base":
-            m = UniXcoderEmbedder(name)
-        else:
-            m = SentenceTransformer(name)
+        m = SentenceTransformer(name)
         _models[name] = m
     return m
 
@@ -269,7 +266,7 @@ def caption_text(item_text: str, source: str) -> str:
 
 
 def embed_with(model: SentenceTransformer, text: str) -> np.ndarray:
-    return model.encode(text, normalize_embeddings=True)
+    return model.encode(text, normalize_embeddings=True).numpy()
 
 
 def l2_normalize(v: np.ndarray) -> np.ndarray:
