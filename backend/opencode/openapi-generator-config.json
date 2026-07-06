@@ -1,0 +1,9 @@
+{
+  "packageName": "opencode_sdk",
+  "projectName": "opencode-sdk",
+  "packageVersion": "0.1.0",
+  "library": "httpx",
+  "supportHttpxSync": true,
+  "useOneOfDiscriminatorLookup": true,
+  "hideGenerationTimestamp": true
+}

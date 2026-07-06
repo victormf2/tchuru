@@ -1,0 +1,31 @@
+# EventPtyExited
+
+
+## Properties
+
+Name | Type | Description | Notes
+------------ | ------------- | ------------- | -------------
+**id** | **str** |  | 
+**type** | **str** |  | 
+**properties** | [**GlobalEventPayloadAnyOf57Properties**](GlobalEventPayloadAnyOf57Properties.md) |  | 
+
+## Example
+
+```python
+from opencode_sdk.models.event_pty_exited import EventPtyExited
+
+# TODO update the JSON string below
+json = "{}"
+# create an instance of EventPtyExited from a JSON string
+event_pty_exited_instance = EventPtyExited.from_json(json)
+# print the JSON string representation of the object
+print(EventPtyExited.to_json())
+
+# convert the object into a dict
+event_pty_exited_dict = event_pty_exited_instance.to_dict()
+# create an instance of EventPtyExited from a dict
+event_pty_exited_from_dict = EventPtyExited.from_dict(event_pty_exited_dict)
+```
+[[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
+
+

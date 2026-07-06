@@ -1,0 +1,14 @@
+# PermissionV2Effect
+
+
+## Enum
+
+* `ALLOW` (value: `'allow'`)
+
+* `DENY` (value: `'deny'`)
+
+* `ASK` (value: `'ask'`)
+
+[[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
+
+
