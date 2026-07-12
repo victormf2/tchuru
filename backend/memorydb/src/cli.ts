@@ -1,0 +1,186 @@
+import { mkdirSync } from "node:fs"
+import { dirname } from "node:path"
+import { loadConfig, type Config } from "./config.ts"
+import { openGraph, bootstrapGraph, type Graph } from "./graph.ts"
+import {
+  buildTaggedSession,
+  openOpenCode,
+  type OpenSource,
+  type SessionRow,
+  type TaggedSession,
+} from "./sources.ts"
+import { loadEmbedder, type Embedder } from "./embed.ts"
+import { createExtractor, type Extractor } from "./extract.ts"
+import { markSessionError, writeExtraction, type IngestResult } from "./ingest.ts"
+
+export type RunSummary = {
+  totalSeen: number
+  processed: IngestResult[]
+  skipped: { sessionId: string; reason: string }[]
+  errors: { sessionId: string; message: string }[]
+  totalElapsedMs: number
+}
+
+type TaggedInput = {
+  session: SessionRow
+  tagged: TaggedSession
+}
+
+function selectSessions(
+  source: OpenSource,
+  config: Config,
+): SessionRow[] {
+  if (config.session) {
+    const s = source.getSession(config.session)
+    if (!s) {
+      throw new Error(`session not found: ${config.session}`)
+    }
+    return [s]
+  }
+  return source.listPendingSessions(config.limit)
+}
+
+function buildTagged(
+  source: OpenSource,
+  sessions: SessionRow[],
+  config: Config,
+): TaggedInput[] {
+  const out: TaggedInput[] = []
+  for (const s of sessions) {
+    const tagged = buildTaggedSession(source, s, {
+      includeReasoning: config.includeReasoning,
+    })
+    if (tagged.text.length === 0) {
+      continue
+    }
+    if (tagged.text.length > config.maxCharsPerSession) {
+      continue
+    }
+    out.push({ session: s, tagged })
+  }
+  return out
+}
+
+export type RunDeps = {
+  graph: Graph
+  source: OpenSource
+  embedder: Embedder
+  extractor: Extractor
+  config: Config
+}
+
+export async function runOnce(deps: RunDeps): Promise<RunSummary> {
+  const { graph, source, embedder, extractor, config } = deps
+  const sessions = selectSessions(source, config)
+  const taggedInputs = buildTagged(source, sessions, config)
+  const processed: IngestResult[] = []
+  const skipped: RunSummary["skipped"] = []
+  const errors: RunSummary["errors"] = []
+  const start = Date.now()
+
+  for (const { session, tagged } of taggedInputs) {
+    if (config.dryRun) {
+      process.stdout.write(
+        `[dry-run] ${session.id} — ${tagged.textPartCount} text parts, ${tagged.text.length} chars\n`,
+      )
+      continue
+    }
+    const ctrl = new AbortController()
+    try {
+      const extraction = await extractor.extract(tagged.text, ctrl.signal)
+      const result = await writeExtraction(
+        graph,
+        embedder,
+        session.id,
+        extraction,
+      )
+      processed.push(result)
+      process.stdout.write(
+        `[ingest] ${session.id} — ${result.factCount} facts, ${result.entityCount} entities, ${result.relationshipCount} rels — ${result.elapsedMs}ms\n`,
+      )
+    } catch (e) {
+      const msg = (e as Error).message ?? String(e)
+      ctrl.abort()
+      try {
+        markSessionError(graph, session.id, msg.slice(0, 500))
+      } catch {
+        // best effort
+      }
+      errors.push({ sessionId: session.id, message: msg })
+      process.stderr.write(`[error] ${session.id}: ${msg}\n`)
+    }
+  }
+
+  for (const s of sessions) {
+    if (taggedInputs.find((t) => t.session.id === s.id)) continue
+    skipped.push({ sessionId: s.id, reason: "empty or too long" })
+  }
+
+  return {
+    totalSeen: sessions.length,
+    processed,
+    skipped,
+    errors,
+    totalElapsedMs: Date.now() - start,
+  }
+}
+
+export async function main(argv: string[] = process.argv.slice(2)): Promise<number> {
+  const config = loadConfig(argv)
+  mkdirSync(dirname(config.ladybugDb), { recursive: true })
+
+  process.stderr.write(
+    `[memorydb] opencode_db=${config.opencodeDb}\n[memorydb] db=${config.ladybugDb}\n[memorydb] model_dir=${config.modelDir}\n`,
+  )
+
+  const graph = openGraph(config.ladybugDb)
+  bootstrapGraph(graph)
+  const source = openOpenCode(config.opencodeDb)
+  const embedder = await loadEmbedder(config.modelDir)
+  const extractor = await createExtractor({
+    port: config.opencodePort,
+    timeoutMs: config.extractionTimeoutMs,
+    mode: config.extractionMode,
+  })
+
+  try {
+    const summary = await runOnce({ graph, source, embedder, extractor, config })
+    process.stdout.write(
+      `\n[memorydb] done — seen=${summary.totalSeen} processed=${summary.processed.length} skipped=${summary.skipped.length} errors=${summary.errors.length} elapsed=${summary.totalElapsedMs}ms\n`,
+    )
+    return summary.errors.length === 0 ? 0 : 1
+  } finally {
+    try {
+      source.close()
+    } catch {
+      // ignore
+    }
+    try {
+      embedder.dispose()
+    } catch {
+      // ignore
+    }
+    try {
+      await extractor.close()
+    } catch {
+      // ignore
+    }
+    try {
+      graph.close()
+    } catch {
+      // ignore
+    }
+  }
+}
+
+if (import.meta.main) {
+  main().then(
+    (code) => {
+      process.exit(code)
+    },
+    (err) => {
+      process.stderr.write(`[fatal] ${(err as Error).stack ?? String(err)}\n`)
+      process.exit(2)
+    },
+  )
+}

@@ -1,6 +1,6 @@
 {
-  "name": "poc_v3",
-  "module": "index.ts",
+  "name": "memorydb",
+  "module": "src/cli.ts",
   "type": "module",
   "private": true,
   "devDependencies": {
@@ -11,9 +11,7 @@
   },
   "dependencies": {
     "@huggingface/transformers": "^4.2.0",
-    "@ladybugdb/core": "^0.17.0-dev.20260519",
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "@opencode-ai/sdk": "1.17.12",
-    "zod": "^4.4.3"
+    "@ladybugdb/core": "0.17.0-dev.20260519",
+    "@opencode-ai/sdk": "1.17.12"
   }
 }

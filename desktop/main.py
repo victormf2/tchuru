@@ -2,6 +2,7 @@ import signal
 import sys
 from pathlib import Path
 
+from App.Notes import NoteDialogController as _
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QGuiApplication
 from PySide6.QtQuick import QQuickView
@@ -38,7 +39,7 @@ if __name__ == "__main__":
     view.setHeight(geometry.height())
 
     view.engine().addImportPath(sys.path[0])
-    view.loadFromModule("App/Tasks", "TaskSelector")
+    view.loadFromModule("App/Notes", "NoteDialog")
     if view.status() == QQuickView.Status.Error:
         sys.exit(-1)
 

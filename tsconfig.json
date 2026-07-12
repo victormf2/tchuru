@@ -20,6 +20,7 @@
   },
   "references": [
     { "path": "./backend/poc_v3/tsconfig.json" },
-    { "path": "./backend/poc_v4/tsconfig.json" }
+    { "path": "./backend/poc_v4/tsconfig.json" },
+    { "path": "./backend/memorydb/tsconfig.json" }
   ]
 }

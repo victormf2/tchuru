@@ -1,6 +1,6 @@
 {
   "qt-qml.qmlls.additionalImportPaths": [
-    "C:\\Users\\victo\\AppData\\Roaming\\Python\\Python313\\site-packages\\PySide6\\qml",
+    "${workspaceFolder}/.venv/Lib/site-packages/PySide6/qml",
     "${workspaceFolder}/desktop",
     "${workspaceFolder}/desktop/qmltypes"
   ],

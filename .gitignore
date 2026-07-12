@@ -3,3 +3,7 @@ __pycache__
 .opencode/plans
 .venv
 node_modules
+backend/memorydb/data
+backend/memorydb/models
+backend/memorydb/*.lbug
+backend/memorydb/*.lbug-*

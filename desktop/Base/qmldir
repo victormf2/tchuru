@@ -1,3 +1,4 @@
 module Base
 Overlay Overlay.qml
 Root Root.qml
+singleton Theme Theme.qml
