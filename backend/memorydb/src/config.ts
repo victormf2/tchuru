@@ -1,6 +1,6 @@
 import { homedir } from "node:os"
 import { join } from "node:path"
-import type { ExtractionMode } from "./extract.ts"
+import type { ExtractionMode } from "./extract.js"
 
 export type Config = {
   opencodeDb: string
@@ -84,7 +84,9 @@ function parseArgs(argv: string[]): Partial<Config> {
       case "--extraction-mode": {
         const m = take()
         if (m !== "mcp" && m !== "json") {
-          throw new Error(`--extraction-mode must be 'mcp' or 'json', got: ${m}`)
+          throw new Error(
+            `--extraction-mode must be 'mcp' or 'json', got: ${m}`,
+          )
         }
         out.extractionMode = m
         break
@@ -129,12 +131,7 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): Config {
   const defaults: Config = {
     opencodeDb: DEFAULT_OPENCODE_DB,
     ladybugDb: join(dataDir, "memorydb.lbug"),
-    modelDir: join(
-      scriptDir,
-      "..",
-      "models",
-      "embeddinggemma-300m-onnx",
-    ),
+    modelDir: join(scriptDir, "..", "models", "embeddinggemma-300m-onnx"),
     modelId: DEFAULT_MODEL_ID,
     limit: 100,
     session: null,

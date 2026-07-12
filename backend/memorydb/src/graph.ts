@@ -1,9 +1,5 @@
-import {
-  Connection,
-  Database,
-  type QueryResult,
-} from "@ladybugdb/core"
-import { BOOTSTRAP_QUERIES } from "./schema.ts"
+import { Connection, Database, type QueryResult } from "@ladybugdb/core"
+import { BOOTSTRAP_QUERIES } from "./schema.js"
 
 export type Graph = {
   db: Database
@@ -30,7 +26,10 @@ function firstResult(r: QueryResult | QueryResult[]): QueryResult {
   return Array.isArray(r) ? (r[0] as QueryResult) : r
 }
 
-function resultNameSet(result: QueryResult | QueryResult[], key: string): Set<string> {
+function resultNameSet(
+  result: QueryResult | QueryResult[],
+  key: string,
+): Set<string> {
   const out = new Set<string>()
   const q = firstResult(result)
   for (const row of q.getAllSync()) {
@@ -65,7 +64,10 @@ export function bootstrapGraph(graph: Graph): void {
   )
 
   for (const q of BOOTSTRAP_QUERIES) {
-    if (q.startsWith("CALL CREATE_VECTOR_INDEX") || q.startsWith("CALL CREATE_FTS_INDEX")) {
+    if (
+      q.startsWith("CALL CREATE_VECTOR_INDEX") ||
+      q.startsWith("CALL CREATE_FTS_INDEX")
+    ) {
       const name = getIndexName(q)
       if (name && indexes.has(name)) continue
     } else {

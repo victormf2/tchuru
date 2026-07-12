@@ -1,5 +1,5 @@
 import { AutoModel, AutoTokenizer } from "@huggingface/transformers"
-import { EMBEDDING_DIM } from "./schema.ts"
+import { EMBEDDING_DIM } from "./schema.js"
 
 export type Embedder = {
   encode(texts: string[]): Promise<number[][]>
@@ -11,7 +11,9 @@ type Tensor = {
   dims: number[]
 }
 
-function toFloat32(data: Float32Array | BigInt64Array | BigUint64Array | number[]): Float32Array {
+function toFloat32(
+  data: Float32Array | BigInt64Array | BigUint64Array | number[],
+): Float32Array {
   if (data instanceof Float32Array) return data
   if (Array.isArray(data)) return Float32Array.from(data)
   const out = new Float32Array(data.length)

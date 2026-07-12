@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { entityId } from "./ontology.ts"
+import type { Embedder } from "./embed.ts"
 import type {
   ExtractedEntity,
   ExtractedFact,
@@ -7,7 +7,7 @@ import type {
   Extraction,
 } from "./extract.ts"
 import type { Graph } from "./graph.ts"
-import type { Embedder } from "./embed.ts"
+import { entityId } from "./ontology.js"
 
 export type IngestResult = {
   sessionId: string
@@ -77,7 +77,12 @@ export async function writeExtraction(
   const ts = nowMicros()
 
   const seen = new Map<string, EntityRow>()
-  function addEntity(type: string, name: string, repo: string | null, metadata: Record<string, unknown> | null): Promise<string> {
+  function addEntity(
+    type: string,
+    name: string,
+    repo: string | null,
+    metadata: Record<string, unknown> | null,
+  ): Promise<string> {
     const norm = `${type}|${name.trim()}|${(repo ?? "").toLowerCase()}`
     if (seen.has(norm)) return Promise.resolve(seen.get(norm)!.id)
     return entityId(type as ExtractedEntity["type"], name, repo).then((id) => {
@@ -248,4 +253,9 @@ export function markSessionError(
   )
 }
 
-export type { Extraction, ExtractedEntity, ExtractedFact, ExtractedRelationship }
+export type {
+  ExtractedEntity,
+  ExtractedFact,
+  ExtractedRelationship,
+  Extraction,
+}

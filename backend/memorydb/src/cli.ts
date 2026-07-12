@@ -1,17 +1,21 @@
 import { mkdirSync } from "node:fs"
 import { dirname } from "node:path"
-import { loadConfig, type Config } from "./config.ts"
-import { openGraph, bootstrapGraph, type Graph } from "./graph.ts"
+import { loadConfig, type Config } from "./config.js"
+import { loadEmbedder, type Embedder } from "./embed.js"
+import { createExtractor, type Extractor } from "./extract.js"
+import { bootstrapGraph, openGraph, type Graph } from "./graph.js"
+import {
+  markSessionError,
+  writeExtraction,
+  type IngestResult,
+} from "./ingest.js"
 import {
   buildTaggedSession,
   openOpenCode,
   type OpenSource,
   type SessionRow,
   type TaggedSession,
-} from "./sources.ts"
-import { loadEmbedder, type Embedder } from "./embed.ts"
-import { createExtractor, type Extractor } from "./extract.ts"
-import { markSessionError, writeExtraction, type IngestResult } from "./ingest.ts"
+} from "./sources.js"
 
 export type RunSummary = {
   totalSeen: number
@@ -26,10 +30,7 @@ type TaggedInput = {
   tagged: TaggedSession
 }
 
-function selectSessions(
-  source: OpenSource,
-  config: Config,
-): SessionRow[] {
+function selectSessions(source: OpenSource, config: Config): SessionRow[] {
   if (config.session) {
     const s = source.getSession(config.session)
     if (!s) {
@@ -125,7 +126,9 @@ export async function runOnce(deps: RunDeps): Promise<RunSummary> {
   }
 }
 
-export async function main(argv: string[] = process.argv.slice(2)): Promise<number> {
+export async function main(
+  argv: string[] = process.argv.slice(2),
+): Promise<number> {
   const config = loadConfig(argv)
   mkdirSync(dirname(config.ladybugDb), { recursive: true })
 
@@ -144,7 +147,13 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   })
 
   try {
-    const summary = await runOnce({ graph, source, embedder, extractor, config })
+    const summary = await runOnce({
+      graph,
+      source,
+      embedder,
+      extractor,
+      config,
+    })
     process.stdout.write(
       `\n[memorydb] done — seen=${summary.totalSeen} processed=${summary.processed.length} skipped=${summary.skipped.length} errors=${summary.errors.length} elapsed=${summary.totalElapsedMs}ms\n`,
     )

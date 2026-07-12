@@ -1,18 +1,18 @@
 import { createOpencode } from "@opencode-ai/sdk/v2"
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client"
 import {
-  startExtractionMcpServer,
   ExtractionInputSchema,
+  startExtractionMcpServer,
   type ExtractionInput,
   type ExtractionMcpServer,
-} from "./extraction-mcp.ts"
+} from "./extraction-mcp.js"
 import {
   isEntityType,
   isRelationshipKind,
   type EntityRef,
   type EntityType,
   type RelationshipKind,
-} from "./ontology.ts"
+} from "./ontology.js"
 
 export type ExtractedEntity = {
   type: EntityType
@@ -171,9 +171,7 @@ function parseFact(v: unknown): ExtractedFact | null {
   if (!text) return null
   const refsRaw = v["entity_refs"]
   const refs = Array.isArray(refsRaw)
-    ? refsRaw
-        .map(parseEntityRef)
-        .filter((r): r is EntityRef => r !== null)
+    ? refsRaw.map(parseEntityRef).filter((r): r is EntityRef => r !== null)
     : []
   const sm = v["source_msg"]
   return {
@@ -313,12 +311,13 @@ async function watchSessionEvents(
             reject(new Error(`session.error: ${JSON.stringify(e.properties)}`))
             return
           }
-          if (e.type === "session.idle" && e.properties?.sessionID === sessionID) {
+          if (
+            e.type === "session.idle" &&
+            e.properties?.sessionID === sessionID
+          ) {
             cleanup()
             reject(
-              new Error(
-                "model ended without calling extraction_result tool",
-              ),
+              new Error("model ended without calling extraction_result tool"),
             )
             return
           }
