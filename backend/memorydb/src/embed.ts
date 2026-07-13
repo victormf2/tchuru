@@ -63,8 +63,13 @@ function meanPool(
 }
 
 export async function loadEmbedder(modelDir: string): Promise<Embedder> {
-  const tokenizer = await AutoTokenizer.from_pretrained(modelDir)
-  const model = await AutoModel.from_pretrained(modelDir, { dtype: "fp32" })
+  const tokenizer = await AutoTokenizer.from_pretrained(modelDir, {
+    local_files_only: false,
+  })
+  const model = await AutoModel.from_pretrained(modelDir, {
+    dtype: "fp32",
+    local_files_only: false,
+  })
 
   return {
     async encode(texts: string[]): Promise<number[][]> {

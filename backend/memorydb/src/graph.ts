@@ -1,5 +1,5 @@
 import { Connection, Database, type QueryResult } from "@ladybugdb/core"
-import { BOOTSTRAP_QUERIES } from "./schema.js"
+import { BOOTSTRAP_QUERIES, SETUP_QUERIES } from "./schema.js"
 
 export type Graph = {
   db: Database
@@ -49,18 +49,29 @@ function getCreateName(q: string): string | null {
 }
 
 function getIndexName(q: string): string | null {
-  const m = q.match(/'([a-z_]+)'\s*,\s*'([a-z_]+)'/)
+  const m = q.match(
+    /'([A-Za-z_][A-Za-z0-9_]*)'\s*,\s*'([A-Za-z_][A-Za-z0-9_]*)'/,
+  )
   return m?.[2] ?? null
 }
 
 export function bootstrapGraph(graph: Graph): void {
+  for (const q of SETUP_QUERIES) {
+    try {
+      graph.conn.querySync(q)
+    } catch (e) {
+      const msg = (e as Error).message ?? String(e)
+      process.stderr.write(`[bootstrap] setup query failed: ${q} — ${msg}\n`)
+    }
+  }
+
   const tables = resultNameSet(
     graph.conn.querySync("CALL SHOW_TABLES() RETURN name as name"),
     "name",
   )
   const indexes = resultNameSet(
-    graph.conn.querySync("CALL SHOW_INDEXES() RETURN name as name"),
-    "name",
+    graph.conn.querySync("CALL SHOW_INDEXES() RETURN index_name as index_name"),
+    "index_name",
   )
 
   for (const q of BOOTSTRAP_QUERIES) {

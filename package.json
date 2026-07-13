@@ -4,16 +4,17 @@
   "type": "module",
   "private": true,
   "devDependencies": {
-    "@types/bun": "latest"
-  },
-  "peerDependencies": {
-    "typescript": "^5"
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^26.1.1",
+    "tsx": "^4.23.0",
+    "typescript": "^7.0.2"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.2.0",
-    "@ladybugdb/core": "^0.17.0-dev.20260519",
+    "@ladybugdb/core": "^0.18.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@opencode-ai/sdk": "1.17.12",
+    "better-sqlite3": "^12.11.1",
     "zod": "^4.4.3"
   }
 }

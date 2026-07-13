@@ -1,4 +1,13 @@
-import { Database } from "bun:sqlite"
+import Database from "better-sqlite3"
+import { sep } from "node:path"
+
+function normalizeDir(p: string): string {
+  if (p.length === 0) return ""
+  return p
+    .replace(/\//g, sep)
+    .replace(/[\\/]+$/, "")
+    .toLowerCase()
+}
 
 export type SessionRow = {
   id: string
@@ -44,14 +53,15 @@ const MESSAGE_AND_PARTS_SQL = `
   ORDER BY m.time_created ASC, p.time_created ASC
 `
 
-const PROCESSED_QUERY = `SELECT id FROM ProcessedSession`
-
 export type OpenSource = {
-  listPendingSessions(limit: number): SessionRow[]
+  listPendingSessions(
+    processedIds: Set<string>,
+    skipDirectory: string,
+    limit: number,
+  ): SessionRow[]
   listRecentSessions(limit: number): SessionRow[]
   getSession(id: string): SessionRow | null
   loadSessionMessages(sessionId: string): MessageRow[]
-  listProcessedIds(): Set<string>
   close(): void
 }
 
@@ -67,26 +77,31 @@ type JoinedRow = {
 export function openOpenCode(dbPath: string): OpenSource {
   const db = new Database(dbPath, { readonly: true })
 
-  const pendingStmt = db.query<SessionRow, [number]>(
-    `SELECT ${SESSION_FIELDS} FROM session
-     WHERE id NOT IN (${PROCESSED_QUERY})
-     ORDER BY time_created DESC
-     LIMIT ?`,
-  )
-  const recentStmt = db.query<SessionRow, [number]>(
+  const recentStmt = db.prepare<[number], SessionRow>(
     `SELECT ${SESSION_FIELDS} FROM session
      ORDER BY time_created DESC
      LIMIT ?`,
   )
-  const oneStmt = db.query<SessionRow, [string]>(
+  const oneStmt = db.prepare<[string], SessionRow>(
     `SELECT ${SESSION_FIELDS} FROM session WHERE id = ?`,
   )
-  const msgStmt = db.query<JoinedRow, [string]>(MESSAGE_AND_PARTS_SQL)
-  const processedStmt = db.query<{ id: string }, []>(PROCESSED_QUERY)
+  const msgStmt = db.prepare<[string], JoinedRow>(MESSAGE_AND_PARTS_SQL)
 
   return {
-    listPendingSessions(limit) {
-      return pendingStmt.all(limit)
+    listPendingSessions(processedIds, skipDirectory, limit) {
+      const skipNorm = normalizeDir(skipDirectory)
+      const rows = recentStmt.all(Math.max(limit * 4, 200))
+      const out: SessionRow[] = []
+      for (const r of rows) {
+        if (processedIds.has(r.id)) continue
+        if (skipNorm.length > 0) {
+          const d = normalizeDir(r.directory ?? "")
+          if (d === skipNorm || d.startsWith(skipNorm + sep)) continue
+        }
+        out.push(r)
+        if (out.length >= limit) break
+      }
+      return out
     },
     listRecentSessions(limit) {
       return recentStmt.all(limit)
@@ -116,12 +131,7 @@ export function openOpenCode(dbPath: string): OpenSource {
           })
         }
       }
-      return [...byMsg.values()].sort(
-        (a, b) => a.time_created - b.time_created,
-      )
-    },
-    listProcessedIds() {
-      return new Set(processedStmt.all().map((r) => r.id))
+      return [...byMsg.values()].sort((a, b) => a.time_created - b.time_created)
     },
     close() {
       db.close()

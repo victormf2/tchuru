@@ -1,6 +1,7 @@
-import { z } from "zod"
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
-import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js"
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js"
+import { createServer, type Server } from "node:http"
+import { z } from "zod"
 
 const EntityRefSchema = z.object({
   type: z.enum(["REPO", "FILE", "URL", "TYPE", "FUNCTION", "MODULE"]),
@@ -65,8 +66,10 @@ Skip pleasantries and explicitly-reverted changes.
 Entity 'kind' for relationships must be one of the closed enum above.
 This is the ONLY thing you should do — no text reply, no preamble.`
 
-export async function startExtractionMcpServer(): Promise<ExtractionMcpServer> {
-  const transport = new WebStandardStreamableHTTPServerTransport({
+export async function startExtractionMcpServer(
+  preferredPort?: number,
+): Promise<ExtractionMcpServer> {
+  const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: () => crypto.randomUUID(),
   })
 
@@ -106,13 +109,25 @@ export async function startExtractionMcpServer(): Promise<ExtractionMcpServer> {
 
   await mcp.connect(transport)
 
-  const httpServer = Bun.serve({
-    port: 0,
-    hostname: "127.0.0.1",
-    fetch: async (req) => transport.handleRequest(req),
+  const httpServer: Server = createServer(async (req, res) => {
+    try {
+      await transport.handleRequest(req, res)
+    } catch (err) {
+      if (!res.headersSent) {
+        res.statusCode = 500
+        res.end((err as Error).message)
+      }
+    }
   })
-
-  const url = `http://127.0.0.1:${httpServer.port}/mcp`
+  await new Promise<void>((resolve) => {
+    httpServer.listen(preferredPort ?? 0, "127.0.0.1", () => resolve())
+  })
+  const addr = httpServer.address()
+  if (addr == null || typeof addr === "string") {
+    throw new Error("failed to bind MCP http server")
+  }
+  const port = addr.port
+  const url = `http://127.0.0.1:${port}/mcp`
 
   return {
     url,
@@ -151,7 +166,7 @@ export async function startExtractionMcpServer(): Promise<ExtractionMcpServer> {
         // ignore
       }
       try {
-        httpServer.stop()
+        httpServer.close()
       } catch {
         // ignore
       }

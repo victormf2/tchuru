@@ -31,7 +31,7 @@ type FactRow = {
   embedding: number[]
   session_id: string
   source_msg: string | null
-  created_at: number
+  created_at: Date
 }
 
 type MentionRow = { fact_id: string; entity_id: string }
@@ -42,8 +42,8 @@ type RelatesRow = {
   weight: number
 }
 
-function nowMicros(): number {
-  return Date.now() * 1000
+function nowTimestamp(): Date {
+  return new Date()
 }
 
 function firstResult(
@@ -74,7 +74,7 @@ export async function writeExtraction(
   extraction: Extraction,
 ): Promise<IngestResult> {
   const start = Date.now()
-  const ts = nowMicros()
+  const ts = nowTimestamp()
 
   const seen = new Map<string, EntityRow>()
   function addEntity(
@@ -147,87 +147,76 @@ export async function writeExtraction(
   }
 
   const conn = graph.conn
-  exec(conn, "BEGIN")
-  try {
-    for (const e of entityRows) {
-      exec(
-        conn,
-        `MERGE (n:Entity {id: $id})
-         ON CREATE SET n.name = $name, n.type = $type, n.repo = $repo,
-                       n.metadata = $metadata, n.created_at = $ts
-         ON MATCH  SET n.metadata = coalesce(n.metadata, $metadata)`,
-        {
-          id: e.id,
-          name: e.name,
-          type: e.type,
-          repo: e.repo,
-          metadata: e.metadata,
-          ts,
-        },
-      )
-    }
-    for (const f of factRows) {
-      exec(
-        conn,
-        `CREATE (n:Fact {
-          id: $id, text: $text, embedding: $embedding,
-          session_id: $session_id, source_msg: $source_msg,
-          created_at: $created_at
-        })`,
-        {
-          id: f.id,
-          text: f.text,
-          embedding: f.embedding,
-          session_id: f.session_id,
-          source_msg: f.source_msg,
-          created_at: f.created_at,
-        },
-      )
-    }
-    for (const m of mentionRows) {
-      exec(
-        conn,
-        `MATCH (f:Fact {id: $fact_id}), (e:Entity {id: $entity_id})
-         MERGE (f)-[:MENTIONS]->(e)`,
-        m,
-      )
-    }
-    for (const r of relatesRows) {
-      exec(
-        conn,
-        `MATCH (a:Entity {id: $from_id}), (b:Entity {id: $to_id})
-         MERGE (a)-[rel:RELATES {kind: $kind}]->(b)
-         ON CREATE SET rel.weight = $weight
-         ON MATCH  SET rel.weight = (rel.weight + $weight) / 2.0`,
-        r,
-      )
-    }
-    if (factRows.length > 1) {
-      const ids = factRows.map((f) => f.id)
-      exec(
-        conn,
-        `MATCH (a:Fact {session_id: $sid}), (b:Fact {session_id: $sid})
-         WHERE a.id < b.id AND a.id IN $ids AND b.id IN $ids
-         MERGE (a)-[:CO_OCCURS]->(b)`,
-        { sid: sessionId, ids },
-      )
-    }
+  for (const e of entityRows) {
     exec(
       conn,
-      `MERGE (p:ProcessedSession {id: $id})
-       ON CREATE SET p.processed_at = $ts, p.fact_count = $n, p.error = NULL
-       ON MATCH  SET p.processed_at = $ts, p.fact_count = $n, p.error = NULL`,
-      { id: sessionId, ts, n: factRows.length },
+      `MERGE (n:Entity {id: $id})
+       ON CREATE SET n.name = $name, n.type = $type, n.repo = $repo,
+                     n.metadata = $metadata, n.created_at = $ts
+       ON MATCH  SET n.metadata = coalesce(n.metadata, $metadata)`,
+      {
+        id: e.id,
+        name: e.name,
+        type: e.type,
+        repo: e.repo,
+        metadata: e.metadata,
+        ts,
+      },
     )
-    exec(conn, "COMMIT")
-  } catch (err) {
-    try {
-      exec(conn, "ROLLBACK")
-    } catch {
-      // ignore
-    }
-    throw err
   }
+  for (const f of factRows) {
+    exec(
+      conn,
+      `CREATE (n:Fact {
+        id: $id, text: $text, embedding: $embedding,
+        session_id: $session_id, source_msg: $source_msg,
+        created_at: $created_at
+      })`,
+      {
+        id: f.id,
+        text: f.text,
+        embedding: f.embedding,
+        session_id: f.session_id,
+        source_msg: f.source_msg,
+        created_at: f.created_at,
+      },
+    )
+  }
+  for (const m of mentionRows) {
+    exec(
+      conn,
+      `MATCH (f:Fact {id: $fact_id}), (e:Entity {id: $entity_id})
+       MERGE (f)-[:MENTIONS]->(e)`,
+      m,
+    )
+  }
+  for (const r of relatesRows) {
+    exec(
+      conn,
+      `MATCH (a:Entity {id: $from_id}), (b:Entity {id: $to_id})
+       MERGE (a)-[rel:RELATES {kind: $kind}]->(b)
+       ON CREATE SET rel.weight = $weight
+       ON MATCH  SET rel.weight = (rel.weight + $weight) / 2.0`,
+      r,
+    )
+  }
+  if (factRows.length > 1) {
+    const ids = factRows.map((f) => f.id)
+    exec(
+      conn,
+      `MATCH (a:Fact {session_id: $sid}), (b:Fact {session_id: $sid})
+       WHERE a.id < b.id AND a.id IN $ids AND b.id IN $ids
+       MERGE (a)-[:CO_OCCURS]->(b)`,
+      { sid: sessionId, ids },
+    )
+  }
+  exec(
+    conn,
+    `MERGE (p:ProcessedSession {id: $id})
+     ON CREATE SET p.processed_at = $ts, p.fact_count = $n, p.error = NULL
+     ON MATCH  SET p.processed_at = $ts, p.fact_count = $n, p.error = NULL`,
+    { id: sessionId, ts, n: factRows.length },
+  )
 
   return {
     sessionId,
@@ -243,7 +232,7 @@ export function markSessionError(
   sessionId: string,
   error: string,
 ): void {
-  const ts = nowMicros()
+  const ts = nowTimestamp()
   exec(
     graph.conn,
     `MERGE (p:ProcessedSession {id: $id})

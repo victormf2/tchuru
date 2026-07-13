@@ -1,5 +1,6 @@
 import { homedir } from "node:os"
-import { join } from "node:path"
+import { dirname, join, resolve } from "node:path"
+import { fileURLToPath } from "node:url"
 import type { ExtractionMode } from "./extract.js"
 
 export type Config = {
@@ -10,11 +11,13 @@ export type Config = {
   limit: number
   session: string | null
   dryRun: boolean
+  teardownLadybug: boolean
   opencodePort: number
   includeReasoning: boolean
   maxCharsPerSession: number
   extractionTimeoutMs: number
   extractionMode: ExtractionMode
+  memoryDir: string
 }
 
 const DEFAULT_OPENCODE_DB = join(
@@ -69,6 +72,12 @@ function parseArgs(argv: string[]): Partial<Config> {
       case "--dry-run":
         out.dryRun = true
         break
+      case "--teardown-ladybug":
+        out.teardownLadybug = true
+        break
+      case "--memory-dir":
+        out.memoryDir = take()
+        break
       case "--opencode-port":
         out.opencodePort = parseInt10(take())
         break
@@ -121,26 +130,30 @@ flags:
   --extraction-timeout-ms <n>    per-session extraction timeout (default: 180000)
   --extraction-mode <m>          'mcp' (default) uses the extraction_result tool; 'json' asks for raw JSON
   --dry-run                      skip LLM + writes, print counts only
+  --teardown-ladybug             delete the ladybug db file before opening
+  --memory-dir <path>            absolute path of the memorydb working dir; sessions in this path are skipped to avoid the memory-of-memory effect (default: backend/memorydb/)
   -h, --help                     show this help
 `)
 }
 
 export function loadConfig(argv: string[] = process.argv.slice(2)): Config {
-  const scriptDir = import.meta.dir
+  const scriptDir = dirname(fileURLToPath(import.meta.url))
   const dataDir = join(scriptDir, "..", "data")
   const defaults: Config = {
     opencodeDb: DEFAULT_OPENCODE_DB,
     ladybugDb: join(dataDir, "memorydb.lbug"),
-    modelDir: join(scriptDir, "..", "models", "embeddinggemma-300m-onnx"),
+    modelDir: DEFAULT_MODEL_ID,
     modelId: DEFAULT_MODEL_ID,
     limit: 100,
     session: null,
     dryRun: false,
+    teardownLadybug: false,
     opencodePort: 9876,
     includeReasoning: false,
     maxCharsPerSession: 600_000,
     extractionTimeoutMs: 180_000,
     extractionMode: "mcp",
+    memoryDir: resolve(scriptDir, ".."),
   }
   const overrides = parseArgs(argv)
   return { ...defaults, ...overrides }

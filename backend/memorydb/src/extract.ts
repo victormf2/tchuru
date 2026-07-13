@@ -1,5 +1,6 @@
 import { createOpencode } from "@opencode-ai/sdk/v2"
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client"
+import { createServer as createHttpServer } from "node:http"
 import {
   ExtractionInputSchema,
   startExtractionMcpServer,
@@ -341,26 +342,39 @@ export type ExtractorOptions = {
 export async function createExtractor(
   opts: ExtractorOptions,
 ): Promise<Extractor> {
+  let mcpServer: ExtractionMcpServer | null = null
+  if (opts.mode === "mcp") {
+    // Pre-allocate a port so we know where the MCP server will listen
+    // before spawning the opencode server (its config must reference
+    // the MCP at startup time — runtime mcp.add doesn't take effect).
+    const allocator = createHttpServer()
+    await new Promise<void>((resolve) => {
+      allocator.listen(0, "127.0.0.1", () => resolve())
+    })
+    const allocatedPort = (allocator.address() as { port: number }).port
+    await new Promise<void>((resolve) => allocator.close(() => resolve()))
+
+    mcpServer = await startExtractionMcpServer(allocatedPort)
+  }
+
   const { client, server } = await createOpencode({
     hostname: "127.0.0.1",
     port: opts.port,
+    timeout: 60_000,
+    ...(mcpServer
+      ? {
+          config: {
+            mcp: {
+              memorydb: {
+                type: "remote" as const,
+                url: mcpServer.url,
+                enabled: true,
+              },
+            },
+          },
+        }
+      : {}),
   })
-
-  let mcpServer: ExtractionMcpServer | null = null
-  if (opts.mode === "mcp") {
-    mcpServer = await startExtractionMcpServer()
-    const addRes = await client.mcp.add({
-      name: "memorydb",
-      config: { type: "remote", url: mcpServer.url, enabled: true },
-    })
-    if (addRes.error) {
-      await mcpServer.close()
-      server.close()
-      throw new Error(
-        `failed to register MCP server: ${JSON.stringify(addRes.error)}`,
-      )
-    }
-  }
 
   async function extractMcp(
     taggedText: string,
@@ -380,34 +394,24 @@ export async function createExtractor(
 
     const userText = `${SYSTEM_PROMPT_MCP}\n\nTranscript:\n\n${taggedText}`
 
-    try {
-      const sendRes = await client.session.promptAsync({
-        sessionID,
-        parts: [{ type: "text", text: userText }],
-      })
-      if (sendRes.error) {
-        throw new Error(`promptAsync: ${JSON.stringify(sendRes.error)}`)
-      }
-
-      const input = await Promise.race([
-        mcpServer.waitForInput(opts.timeoutMs),
-        watchSessionEvents(client, sessionID, signal),
-      ])
-
-      const parsed = ExtractionInputSchema.safeParse(input)
-      if (!parsed.success) {
-        throw new Error(
-          `extraction tool input invalid: ${parsed.error.message}`,
-        )
-      }
-      return extractionFromMcpInput(parsed.data)
-    } finally {
-      try {
-        await client.session.delete({ sessionID })
-      } catch {
-        // best effort
-      }
+    const sendRes = await client.session.promptAsync({
+      sessionID,
+      parts: [{ type: "text", text: userText }],
+    })
+    if (sendRes.error) {
+      throw new Error(`promptAsync: ${JSON.stringify(sendRes.error)}`)
     }
+
+    const input = await Promise.race([
+      mcpServer.waitForInput(opts.timeoutMs),
+      watchSessionEvents(client, sessionID, signal),
+    ])
+
+    const parsed = ExtractionInputSchema.safeParse(input)
+    if (!parsed.success) {
+      throw new Error(`extraction tool input invalid: ${parsed.error.message}`)
+    }
+    return extractionFromMcpInput(parsed.data)
   }
 
   async function extractJson(
@@ -471,27 +475,19 @@ export async function createExtractor(
 
     const userText = `${EXTRACTION_SYSTEM_PROMPT_JSON}\n\nTranscript:\n\n${taggedText}`
 
-    try {
-      const sendRes = await client.session.promptAsync({
-        sessionID,
-        parts: [{ type: "text", text: userText }],
-      })
-      if (sendRes.error) {
-        throw new Error(`promptAsync: ${JSON.stringify(sendRes.error)}`)
-      }
-      await Promise.race([idle, timer])
-      const text = await lastAssistantText(client, sessionID)
-      if (!text) {
-        throw new Error("assistant produced no text")
-      }
-      return parseExtractionJson(text)
-    } finally {
-      try {
-        await client.session.delete({ sessionID })
-      } catch {
-        // best effort
-      }
+    const sendRes = await client.session.promptAsync({
+      sessionID,
+      parts: [{ type: "text", text: userText }],
+    })
+    if (sendRes.error) {
+      throw new Error(`promptAsync: ${JSON.stringify(sendRes.error)}`)
     }
+    await Promise.race([idle, timer])
+    const text = await lastAssistantText(client, sessionID)
+    if (!text) {
+      throw new Error("assistant produced no text")
+    }
+    return parseExtractionJson(text)
   }
 
   return {

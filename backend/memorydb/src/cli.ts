@@ -1,5 +1,6 @@
-import { mkdirSync } from "node:fs"
+import { mkdirSync, rmSync } from "node:fs"
 import { dirname } from "node:path"
+import { fileURLToPath } from "node:url"
 import { loadConfig, type Config } from "./config.js"
 import { loadEmbedder, type Embedder } from "./embed.js"
 import { createExtractor, type Extractor } from "./extract.js"
@@ -30,7 +31,11 @@ type TaggedInput = {
   tagged: TaggedSession
 }
 
-function selectSessions(source: OpenSource, config: Config): SessionRow[] {
+function selectSessions(
+  source: OpenSource,
+  processedIds: Set<string>,
+  config: Config,
+): SessionRow[] {
   if (config.session) {
     const s = source.getSession(config.session)
     if (!s) {
@@ -38,7 +43,25 @@ function selectSessions(source: OpenSource, config: Config): SessionRow[] {
     }
     return [s]
   }
-  return source.listPendingSessions(config.limit)
+  return source.listPendingSessions(
+    processedIds,
+    config.memoryDir,
+    config.limit,
+  )
+}
+
+function loadProcessedIds(graph: Graph): Set<string> {
+  const raw = graph.conn.querySync(
+    "MATCH (p:ProcessedSession) RETURN p.id AS id",
+  )
+  const r = Array.isArray(raw) ? raw[0]! : raw
+  const out = new Set<string>()
+  for (const row of r.getAllSync()) {
+    if (typeof row["id"] === "string") {
+      out.add(row["id"])
+    }
+  }
+  return out
 }
 
 function buildTagged(
@@ -72,7 +95,10 @@ export type RunDeps = {
 
 export async function runOnce(deps: RunDeps): Promise<RunSummary> {
   const { graph, source, embedder, extractor, config } = deps
-  const sessions = selectSessions(source, config)
+  const processedIds = config.session
+    ? new Set<string>()
+    : loadProcessedIds(graph)
+  const sessions = selectSessions(source, processedIds, config)
   const taggedInputs = buildTagged(source, sessions, config)
   const processed: IngestResult[] = []
   const skipped: RunSummary["skipped"] = []
@@ -132,8 +158,19 @@ export async function main(
   const config = loadConfig(argv)
   mkdirSync(dirname(config.ladybugDb), { recursive: true })
 
+  if (config.teardownLadybug) {
+    for (const suffix of ["", ".wal"]) {
+      try {
+        rmSync(config.ladybugDb + suffix, { force: true })
+      } catch {
+        // ignore
+      }
+    }
+    process.stderr.write(`[memorydb] tore down ${config.ladybugDb}\n`)
+  }
+
   process.stderr.write(
-    `[memorydb] opencode_db=${config.opencodeDb}\n[memorydb] db=${config.ladybugDb}\n[memorydb] model_dir=${config.modelDir}\n`,
+    `[memorydb] opencode_db=${config.opencodeDb}\n[memorydb] db=${config.ladybugDb}\n[memorydb] model_dir=${config.modelDir}\n[memorydb] memory_dir=${config.memoryDir}\n`,
   )
 
   const graph = openGraph(config.ladybugDb)
@@ -144,6 +181,7 @@ export async function main(
     port: config.opencodePort,
     timeoutMs: config.extractionTimeoutMs,
     mode: config.extractionMode,
+    directory: config.memoryDir,
   })
 
   try {
@@ -182,7 +220,7 @@ export async function main(
   }
 }
 
-if (import.meta.main) {
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
   main().then(
     (code) => {
       process.exit(code)

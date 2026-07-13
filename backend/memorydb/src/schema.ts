@@ -36,6 +36,13 @@ export const INDEX_DDL = [
   `CALL CREATE_FTS_INDEX('Entity', 'entity_name', ['name'], stemmer := 'porter')`,
 ] as const
 
+export const SETUP_QUERIES = [
+  `INSTALL VECTOR`,
+  `LOAD EXTENSION VECTOR`,
+  `INSTALL FTS`,
+  `LOAD EXTENSION FTS`,
+] as const
+
 export const BOOTSTRAP_QUERIES = [
   ...NODE_DDL,
   ...REL_DDL,
